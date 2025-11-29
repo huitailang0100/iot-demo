@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Run Subscriber",
+      "program": "${workspaceFolder}/subscriber.js",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Run Publisher",
+      "program": "${workspaceFolder}/publisher.js",
+      "envFile": "${workspaceFolder}/.env"
+    }
+  ]
+}
