@@ -15,10 +15,23 @@ dotenv.config();
 
 // 创建HTTP服务器
 const server = http.createServer((req, res) => {
+  // 处理静态文件请求
   if (req.url === '/' || req.url === '/index.html') {
     fs.readFile(path.join(__dirname, 'index.html'), 'utf8', (err, data) => {
       if (err) {
         console.error('[SERVER] Error reading index.html:', err.message);
+        res.writeHead(404);
+        res.end('File not found');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(data);
+    });
+  } else if (req.url === '/visualization.html') {
+    // 添加对 visualization.html 的支持
+    fs.readFile(path.join(__dirname, 'visualization.html'), 'utf8', (err, data) => {
+      if (err) {
+        console.error('[SERVER] Error reading visualization.html:', err.message);
         res.writeHead(404);
         res.end('File not found');
         return;

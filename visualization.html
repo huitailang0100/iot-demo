@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IoT温湿度实时监控</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1a2a6c, #2c3e50);
+      color: #fff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .subtitle {
+      font-size: 1.2rem;
+      opacity: 0.9;
+    }
+
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 10px;
+      padding: 15px 20px;
+      margin-bottom: 30px;
+    }
+
+    #status {
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-weight: bold;
+      background: #ff9800;
+    }
+
+    .connected {
+      background: #4caf50;
+    }
+
+    .disconnected {
+      background: #f44336;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .card-title {
+      font-size: 1.2rem;
+      margin-bottom: 15px;
+      opacity: 0.8;
+    }
+
+    .card-value {
+      font-size: 3rem;
+      font-weight: bold;
+    }
+
+    .temperature-value {
+      color: #ff5252;
+    }
+
+    .humidity-value {
+      color: #4fc3f7;
+    }
+
+    .device-info {
+      color: #69f0ae;
+    }
+
+    .chart-container {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 30px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .chart-title {
+      text-align: center;
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+    }
+
+    #chart {
+      width: 100%;
+      height: 400px;
+    }
+
+    .data-history {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .history-card {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .history-title {
+      font-size: 1.3rem;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+
+    .history-value {
+      font-size: 2.5rem;
+      font-weight: bold;
+      text-align: center;
+      margin: 10px 0;
+    }
+
+    .min-value {
+      color: #4caf50;
+    }
+
+    .max-value {
+      color: #f44336;
+    }
+
+    .avg-value {
+      color: #ffeb3b;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+
+    button {
+      padding: 12px 25px;
+      border: none;
+      border-radius: 25px;
+      background: linear-gradient(to right, #3498db, #8e44ad);
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+
+    button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+
+    #reset-btn {
+      background: linear-gradient(to right, #e74c3c, #c0392b);
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      opacity: 0.7;
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 768px) {
+      .dashboard, .data-history {
+        grid-template-columns: 1fr;
+      }
+      
+      h1 {
+        font-size: 2rem;
+      }
+      
+      .status-bar {
+        flex-direction: column;
+        gap: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>IoT温湿度实时监控</h1>
+      <p class="subtitle">基于MQTT协议的实时数据可视化</p>
+    </header>
+
+    <div class="status-bar">
+      <div>
+        <strong>设备状态:</strong> <span id="device-status">未知</span>
+      </div>
+      <div id="status" class="">正在连接...</div>
+      <div>
+        <strong>更新时间:</strong> <span id="last-update">--</span>
+      </div>
+    </div>
+
+    <div class="dashboard">
+      <div class="card">
+        <div class="card-title">当前温度</div>
+        <div class="card-value temperature-value" id="current-temperature">--</div>
+        <div>摄氏度 (°C)</div>
+      </div>
+      
+      <div class="card">
+        <div class="card-title">当前湿度</div>
+        <div class="card-value humidity-value" id="current-humidity">--</div>
+        <div>相对湿度 (%)</div>
+      </div>
+      
+      <div class="card">
+        <div class="card-title">设备信息</div>
+        <div class="card-value device-info" id="device-id">--</div>
+        <div>设备ID</div>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-title">温湿度变化趋势</div>
+      <canvas id="chart"></canvas>
+    </div>
+
+    <div class="data-history">
+      <div class="history-card">
+        <div class="history-title">温度统计</div>
+        <div>最低温度: <span class="history-value min-value" id="min-temperature">--</span></div>
+        <div>最高温度: <span class="history-value max-value" id="max-temperature">--</span></div>
+        <div>平均温度: <span class="history-value avg-value" id="avg-temperature">--</span></div>
+      </div>
+      
+      <div class="history-card">
+        <div class="history-title">湿度统计</div>
+        <div>最低湿度: <span class="history-value min-value" id="min-humidity">--</span></div>
+        <div>最高湿度: <span class="history-value max-value" id="max-humidity">--</span></div>
+        <div>平均湿度: <span class="history-value avg-value" id="avg-humidity">--</span></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="reset-btn">重置统计数据</button>
+    </div>
+
+    <footer>
+      <p>IoT温湿度监控系统 &copy; 2023 | 实时数据可视化</p>
+    </footer>
+  </div>
+
+  <script>
+    // 连接到WebSocket服务器
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+    
+    // 获取DOM元素
+    const statusElement = document.getElementById('status');
+    const deviceStatusElement = document.getElementById('device-status');
+    const lastUpdateElement = document.getElementById('last-update');
+    const currentTemperatureElement = document.getElementById('current-temperature');
+    const currentHumidityElement = document.getElementById('current-humidity');
+    const deviceIdElement = document.getElementById('device-id');
+    const minTemperatureElement = document.getElementById('min-temperature');
+    const maxTemperatureElement = document.getElementById('max-temperature');
+    const avgTemperatureElement = document.getElementById('avg-temperature');
+    const minHumidityElement = document.getElementById('min-humidity');
+    const maxHumidityElement = document.getElementById('max-humidity');
+    const avgHumidityElement = document.getElementById('avg-humidity');
+    const resetBtn = document.getElementById('reset-btn');
+    
+    // 图表相关
+    const canvas = document.getElementById('chart');
+    const ctx = canvas.getContext('2d');
+    
+    // 数据存储
+    let chartData = [];
+    let temperatureStats = { min: null, max: null, sum: 0, count: 0 };
+    let humidityStats = { min: null, max: null, sum: 0, count: 0 };
+    
+    // WebSocket连接成功
+    ws.onopen = function() {
+      console.log('[VISUALIZATION] Connected to server');
+      statusElement.textContent = '已连接';
+      statusElement.className = 'connected';
+      deviceStatusElement.textContent = '在线';
+    };
+    
+    // 接收服务器消息
+    ws.onmessage = function(event) {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'mqtt_data') {
+          updateData(data.payload);
+        } else if (data.type === 'welcome') {
+          console.log('[VISUALIZATION] Welcome message:', data.message);
+        }
+      } catch (e) {
+        console.error('[VISUALIZATION] Error parsing message:', e);
+      }
+    };
+    
+    // WebSocket连接关闭
+    ws.onclose = function() {
+      console.log('[VISUALIZATION] Disconnected from server');
+      statusElement.textContent = '已断开';
+      statusElement.className = 'disconnected';
+      deviceStatusElement.textContent = '离线';
+    };
+    
+    // WebSocket发生错误
+    ws.onerror = function(error) {
+      console.error('[VISUALIZATION] WebSocket error:', error);
+      statusElement.textContent = '连接错误';
+      statusElement.className = 'disconnected';
+      deviceStatusElement.textContent = '错误';
+    };
+    
+    // 更新数据
+    function updateData(payload) {
+      // 更新当前值显示
+      currentTemperatureElement.textContent = payload.temperature || '--';
+      currentHumidityElement.textContent = payload.humidity || '--';
+      deviceIdElement.textContent = payload.deviceId || '--';
+      
+      // 更新最后更新时间
+      const now = new Date();
+      lastUpdateElement.textContent = now.toLocaleTimeString();
+      
+      // 更新统计数据
+      updateStatistics(payload);
+      
+      // 添加到图表数据
+      addToChartData(payload);
+      
+      // 更新图表
+      drawChart();
+    }
+    
+    // 更新统计数据
+    function updateStatistics(payload) {
+      const temperature = parseFloat(payload.temperature);
+      const humidity = parseFloat(payload.humidity);
+      
+      // 更新温度统计
+      if (!isNaN(temperature)) {
+        if (temperatureStats.min === null || temperature < temperatureStats.min) {
+          temperatureStats.min = temperature;
+        }
+        if (temperatureStats.max === null || temperature > temperatureStats.max) {
+          temperatureStats.max = temperature;
+        }
+        temperatureStats.sum += temperature;
+        temperatureStats.count++;
+        
+        // 更新UI
+        minTemperatureElement.textContent = temperatureStats.min.toFixed(2);
+        maxTemperatureElement.textContent = temperatureStats.max.toFixed(2);
+        avgTemperatureElement.textContent = (temperatureStats.sum / temperatureStats.count).toFixed(2);
+      }
+      
+      // 更新湿度统计
+      if (!isNaN(humidity)) {
+        if (humidityStats.min === null || humidity < humidityStats.min) {
+          humidityStats.min = humidity;
+        }
+        if (humidityStats.max === null || humidity > humidityStats.max) {
+          humidityStats.max = humidity;
+        }
+        humidityStats.sum += humidity;
+        humidityStats.count++;
+        
+        // 更新UI
+        minHumidityElement.textContent = humidityStats.min.toFixed(2);
+        maxHumidityElement.textContent = humidityStats.max.toFixed(2);
+        avgHumidityElement.textContent = (humidityStats.sum / humidityStats.count).toFixed(2);
+      }
+    }
+    
+    // 添加数据到图表
+    function addToChartData(payload) {
+      const dataPoint = {
+        time: new Date(payload.ts),
+        temperature: parseFloat(payload.temperature),
+        humidity: parseFloat(payload.humidity)
+      };
+      
+      chartData.push(dataPoint);
+      
+      // 只保留最近100个数据点
+      if (chartData.length > 100) {
+        chartData.shift();
+      }
+    }
+    
+    // 绘制图表
+    function drawChart() {
+      // 设置画布大小
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      
+      if (chartData.length === 0) return;
+      
+      // 清空画布
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // 设置样式
+      const width = canvas.width;
+      const height = canvas.height;
+      const padding = 60;
+      
+      // 计算数据范围
+      const temperatures = chartData.map(d => d.temperature).filter(t => !isNaN(t));
+      const humidities = chartData.map(d => d.humidity).filter(h => !isNaN(h));
+      
+      if (temperatures.length === 0 && humidities.length === 0) return;
+      
+      let minTemp = temperatures.length > 0 ? Math.min(...temperatures) : 0;
+      let maxTemp = temperatures.length > 0 ? Math.max(...temperatures) : 0;
+      let minHumidity = humidities.length > 0 ? Math.min(...humidities) : 0;
+      let maxHumidity = humidities.length > 0 ? Math.max(...humidities) : 0;
+      
+      // 添加一些边距
+      const tempRange = maxTemp - minTemp;
+      const humidityRange = maxHumidity - minHumidity;
+      
+      minTemp -= tempRange * 0.1;
+      maxTemp += tempRange * 0.1;
+      minHumidity -= humidityRange * 0.1;
+      maxHumidity += humidityRange * 0.1;
+      
+      // 确保最小范围
+      if (minTemp === maxTemp) {
+        minTemp -= 1;
+        maxTemp += 1;
+      }
+      
+      if (minHumidity === maxHumidity) {
+        minHumidity -= 1;
+        maxHumidity += 1;
+      }
+      
+      // 绘制网格
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.lineWidth = 1;
+      
+      // 水平网格线
+      for (let i = 0; i <= 10; i++) {
+        const y = padding + (i / 10) * (height - 2 * padding);
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(width - padding, y);
+        ctx.stroke();
+      }
+      
+      // 垂直网格线
+      const timePoints = Math.min(10, chartData.length);
+      for (let i = 0; i <= timePoints; i++) {
+        const x = padding + (i / timePoints) * (width - 2 * padding);
+        ctx.beginPath();
+        ctx.moveTo(x, padding);
+        ctx.lineTo(x, height - padding);
+        ctx.stroke();
+      }
+      
+      // 绘制坐标轴
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(padding, padding);
+      ctx.lineTo(padding, height - padding);
+      ctx.lineTo(width - padding, height - padding);
+      ctx.stroke();
+      
+      // 绘制温度线
+      if (temperatures.length > 0) {
+        ctx.strokeStyle = '#ff5252';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        chartData.forEach((point, i) => {
+          if (isNaN(point.temperature)) return;
+          
+          const x = padding + (i / (chartData.length - 1)) * (width - 2 * padding);
+          const y = height - padding - ((point.temperature - minTemp) / (maxTemp - minTemp)) * (height - 2 * padding);
+          
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        
+        ctx.stroke();
+      }
+      
+      // 绘制湿度线
+      if (humidities.length > 0) {
+        ctx.strokeStyle = '#4fc3f7';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        chartData.forEach((point, i) => {
+          if (isNaN(point.humidity)) return;
+          
+          const x = padding + (i / (chartData.length - 1)) * (width - 2 * padding);
+          const y = height - padding - ((point.humidity - minHumidity) / (maxHumidity - minHumidity)) * (height - 2 * padding);
+          
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        
+        ctx.stroke();
+      }
+      
+      // 添加标签
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'center';
+      
+      // Y轴标签
+      ctx.fillText('温度 (°C)', 20, padding + 10);
+      ctx.fillText('湿度 (%)', width - 20, height - padding - 10);
+      
+      // 图例
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#ff5252';
+      ctx.fillRect(width - 150, 20, 15, 15);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fillText('温度', width - 130, 32);
+      
+      ctx.fillStyle = '#4fc3f7';
+      ctx.fillRect(width - 150, 45, 15, 15);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fillText('湿度', width - 130, 57);
+    }
+    
+    // 重置统计数据
+    resetBtn.addEventListener('click', function() {
+      // 重置统计数据
+      temperatureStats = { min: null, max: null, sum: 0, count: 0 };
+      humidityStats = { min: null, max: null, sum: 0, count: 0 };
+      
+      // 重置UI
+      minTemperatureElement.textContent = '--';
+      maxTemperatureElement.textContent = '--';
+      avgTemperatureElement.textContent = '--';
+      minHumidityElement.textContent = '--';
+      maxHumidityElement.textContent = '--';
+      avgHumidityElement.textContent = '--';
+      
+      // 重置图表数据
+      chartData = [];
+      drawChart();
+    });
+    
+    // 窗口大小改变时重新绘制图表
+    window.addEventListener('resize', function() {
+      drawChart();
+    });
+  </script>
+</body>
+</html>
