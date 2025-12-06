@@ -4,11 +4,13 @@
   "type": "module",
   "scripts": {
     "pub": "node publisher.js",
-    "sub": "node subscriber.js"
+    "sub": "node subscriber.js",
+    "server": "node server.js"
   },
   "dependencies": {
     "dotenv": "^16.6.1",
-    "mqtt": "^5.14.1"
+    "mqtt": "^5.14.1",
+    "ws": "^8.18.3"
   },
   "description": "",
   "main": "publisher.js",
