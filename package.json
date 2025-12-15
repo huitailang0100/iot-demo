@@ -10,6 +10,8 @@
   "dependencies": {
     "dotenv": "^16.6.1",
     "mqtt": "^5.14.1",
+    "sql.js": "^1.13.0",
+    "sqlite": "^5.1.1",
     "ws": "^8.18.3"
   },
   "description": "",
