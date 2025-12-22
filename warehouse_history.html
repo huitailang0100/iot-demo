@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IoT历史数据可视化</title>
+  <title>仓储环境历史数据分析</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
@@ -43,6 +43,7 @@
       text-shadow: 0 2px 4px rgba(0,0,0,0.3);
       background: linear-gradient(to right, #4facfe, #00f2fe);
       -webkit-background-clip: text;
+      background-clip: text; /* 添加标准属性以提高兼容性 */
       -webkit-text-fill-color: transparent;
     }
 
@@ -121,6 +122,7 @@
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
       backdrop-filter: blur(10px);
       border: 1px solid rgba(255, 255, 255, 0.1);
+      height: 600px; /* 固定容器高度 */
     }
 
     .chart-title {
@@ -135,7 +137,7 @@
 
     #chart {
       width: 100%;
-      height: 500px;
+      height: calc(100% - 40px); /* 图表占满容器减去标题高度 */
     }
 
     .stats-container {
@@ -293,6 +295,11 @@
       .stats-container {
         grid-template-columns: 1fr 1fr;
       }
+      
+      /* 在小屏幕上调整图表高度 */
+      .chart-container {
+        height: 500px;
+      }
     }
 
     @media (max-width: 480px) {
@@ -310,8 +317,8 @@
 <body>
   <div class="container">
     <header>
-      <h1><i class="fas fa-chart-line"></i> IoT历史数据可视化</h1>
-      <p class="subtitle">基于SQLite数据库的历史数据展示与分析</p>
+      <h1><i class="fas fa-warehouse"></i> 仓储环境历史数据分析</h1>
+      <p class="subtitle">基于SQLite数据库的仓储环境历史数据展示与分析</p>
     </header>
 
     <div class="status-bar">
@@ -331,9 +338,9 @@
 
     <div class="controls">
       <div class="control-group">
-        <label for="device-selector"><i class="fas fa-microchip"></i> 设备:</label>
+        <label for="device-selector"><i class="fas fa-microchip"></i> 传感器:</label>
         <select id="device-selector">
-          <option value="">所有设备</option>
+          <option value="">所有传感器</option>
         </select>
       </div>
       
@@ -390,13 +397,13 @@
     </div>
 
     <div class="chart-container">
-      <div class="chart-title"><i class="fas fa-chart-line"></i> 历史数据趋势图</div>
+      <div class="chart-title"><i class="fas fa-chart-line"></i> 仓储环境历史趋势图</div>
       <canvas id="chart"></canvas>
     </div>
 
     <div class="data-table-container">
       <div class="table-header">
-        <h2 class="table-title"><i class="fas fa-table"></i> 详细数据表</h2>
+        <h2 class="table-title"><i class="fas fa-table"></i> 仓储环境详细数据表</h2>
         <button class="export-btn" id="export-btn"><i class="fas fa-download"></i> 导出CSV</button>
       </div>
       <table id="data-table">
@@ -404,9 +411,13 @@
           <tr>
             <th>ID</th>
             <th>设备ID</th>
+            <th>仓储区域</th>
             <th>时间戳</th>
             <th>温度 (°C)</th>
             <th>湿度 (%)</th>
+            <th>空气质量</th>
+            <th>光照强度(lux)</th>
+            <th>噪音(dB)</th>
           </tr>
         </thead>
         <tbody>
@@ -417,7 +428,7 @@
     </div>
 
     <footer>
-      <p>IoT历史数据可视化系统 &copy; 2023 | 基于SQLite数据库</p>
+      <p>智能仓储环境监测系统 &copy; 2023 | 基于SQLite数据库</p>
     </footer>
   </div>
 
@@ -519,9 +530,8 @@
             ticks: {
               color: '#fff'
             },
-            // 将纵轴长度减少3倍
-            min: -10,
-            max: 40
+            min: 10,
+            max: 35
           },
           y1: {
             type: 'linear',
@@ -538,9 +548,8 @@
             ticks: {
               color: '#fff'
             },
-            // 将纵轴长度减少3倍
-            min: 0,
-            max: 100
+            min: 30,
+            max: 80
           }
         }
       }
@@ -575,7 +584,7 @@
         .then(response => response.json())
         .then(data => {
           const devices = [...new Set(data.map(item => item.device_id).filter(Boolean))];
-          deviceSelector.innerHTML = '<option value="">所有设备</option>';
+          deviceSelector.innerHTML = '<option value="">所有传感器</option>';
           devices.forEach(device => {
             const option = document.createElement('option');
             option.value = device;
@@ -641,9 +650,13 @@
         row.innerHTML = `
           <td>${item.id}</td>
           <td>${item.device_id || 'N/A'}</td>
+          <td>${item.location || 'N/A'}</td>
           <td>${formattedDate}</td>
           <td>${item.temperature !== null ? item.temperature.toFixed(2) : 'N/A'}</td>
           <td>${item.humidity !== null ? item.humidity.toFixed(2) : 'N/A'}</td>
+          <td>${item.air_quality !== null ? item.air_quality.toFixed(2) : 'N/A'}</td>
+          <td>${item.light_level !== null ? item.light_level : 'N/A'}</td>
+          <td>${item.noise_level !== null ? item.noise_level.toFixed(2) : 'N/A'}</td>
         `;
         
         dataTable.appendChild(row);
@@ -732,19 +745,19 @@
         .then(data => {
           // 准备CSV内容
           let csvContent = '\uFEFF'; // BOM for UTF-8
-          csvContent += 'ID,设备ID,时间戳,温度(°C),湿度(%)\n';
+          csvContent += 'ID,设备ID,仓储区域,时间戳,温度(°C),湿度(%),空气质量,光照强度(lux),噪音(dB)\n';
           
           data.forEach(item => {
             const date = new Date(item.timestamp);
             const formattedDate = date.toLocaleString('zh-CN');
-            csvContent += `${item.id},${item.device_id || 'N/A'},${formattedDate},${item.temperature !== null ? item.temperature.toFixed(2) : 'N/A'},${item.humidity !== null ? item.humidity.toFixed(2) : 'N/A'}\n`;
+            csvContent += `${item.id},${item.device_id || 'N/A'},${item.location || 'N/A'},${formattedDate},${item.temperature !== null ? item.temperature.toFixed(2) : 'N/A'},${item.humidity !== null ? item.humidity.toFixed(2) : 'N/A'},${item.air_quality !== null ? item.air_quality.toFixed(2) : 'N/A'},${item.light_level !== null ? item.light_level : 'N/A'},${item.noise_level !== null ? item.noise_level.toFixed(2) : 'N/A'}\n`;
           });
           
           // 创建下载链接
           const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
-          const fileName = `iot_data_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`;
+          const fileName = `warehouse_data_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`;
           
           link.setAttribute('href', url);
           link.setAttribute('download', fileName);

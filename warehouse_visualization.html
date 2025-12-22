@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IoT温湿度实时监控</title>
+  <title>智能仓储环境监测系统</title>
   <style>
     * {
       margin: 0;
@@ -28,12 +28,21 @@
       text-align: center;
       margin-bottom: 30px;
       padding: 20px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 15px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     h1 {
       font-size: 2.5rem;
       margin-bottom: 10px;
       text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      background: linear-gradient(to right, #4facfe, #00f2fe);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
 
     .subtitle {
@@ -102,6 +111,18 @@
       color: #4fc3f7;
     }
 
+    .air-quality-value {
+      color: #69f0ae;
+    }
+
+    .light-level-value {
+      color: #ffd740;
+    }
+
+    .noise-level-value {
+      color: #7c4dff;
+    }
+
     .device-info {
       color: #69f0ae;
     }
@@ -114,6 +135,7 @@
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
       backdrop-filter: blur(10px);
       border: 1px solid rgba(255, 255, 255, 0.1);
+      height: 500px;
     }
 
     .chart-title {
@@ -124,7 +146,7 @@
 
     #chart {
       width: 100%;
-      height: 400px;
+      height: calc(100% - 40px);
     }
 
     .data-history {
@@ -173,6 +195,7 @@
       justify-content: center;
       gap: 15px;
       margin-bottom: 30px;
+      flex-wrap: wrap;
     }
 
     button {
@@ -196,6 +219,88 @@
       background: linear-gradient(to right, #e74c3c, #c0392b);
     }
 
+    .navigation-btn {
+      background: linear-gradient(to right, #9b59b6, #8e44ad);
+    }
+
+    .actuator-controls {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 30px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .actuator-title {
+      text-align: center;
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+    }
+
+    .actuator-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+    }
+
+    .actuator-card {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      padding: 15px;
+      text-align: center;
+    }
+
+    .actuator-name {
+      font-size: 1.1rem;
+      margin-bottom: 10px;
+    }
+
+    .actuator-status {
+      font-size: 0.9rem;
+      margin-bottom: 15px;
+      padding: 5px;
+      border-radius: 5px;
+    }
+
+    .status-active {
+      background: rgba(76, 175, 80, 0.3);
+      color: #4caf50;
+    }
+
+    .status-inactive {
+      background: rgba(244, 67, 54, 0.3);
+      color: #f44336;
+    }
+
+    .actuator-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .control-btn {
+      padding: 8px 15px;
+      border: none;
+      border-radius: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      min-width: 70px;
+    }
+
+    .start-btn {
+      background: linear-gradient(to right, #4caf50, #8bc34a);
+      color: white;
+    }
+
+    .stop-btn {
+      background: linear-gradient(to right, #f44336, #e91e63);
+      color: white;
+    }
+
     footer {
       text-align: center;
       padding: 20px;
@@ -204,7 +309,7 @@
     }
 
     @media (max-width: 768px) {
-      .dashboard, .data-history {
+      .dashboard, .data-history, .actuator-grid {
         grid-template-columns: 1fr;
       }
       
@@ -216,14 +321,28 @@
         flex-direction: column;
         gap: 15px;
       }
+      
+      .chart-container {
+        height: 400px;
+      }
+      
+      .controls {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      button {
+        width: 100%;
+        max-width: 300px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>IoT温湿度实时监控</h1>
-      <p class="subtitle">基于MQTT协议的实时数据可视化</p>
+      <h1>智能仓储环境监测系统</h1>
+      <p class="subtitle">基于MQTT协议的仓储环境实时数据监控</p>
     </header>
 
     <div class="status-bar">
@@ -250,14 +369,75 @@
       </div>
       
       <div class="card">
-        <div class="card-title">设备信息</div>
-        <div class="card-value device-info" id="device-id">--</div>
-        <div>设备ID</div>
+        <div class="card-title">空气质量</div>
+        <div class="card-value air-quality-value" id="current-air-quality">--</div>
+        <div>AQI指数</div>
+      </div>
+      
+      <div class="card">
+        <div class="card-title">光照强度</div>
+        <div class="card-value light-level-value" id="current-light-level">--</div>
+        <div>lux</div>
+      </div>
+      
+      <div class="card">
+        <div class="card-title">噪音水平</div>
+        <div class="card-value noise-level-value" id="current-noise-level">--</div>
+        <div>dB</div>
+      </div>
+      
+      <div class="card">
+        <div class="card-title">设备位置</div>
+        <div class="card-value device-info" id="device-location">--</div>
+        <div>仓储区域</div>
+      </div>
+    </div>
+
+    <div class="actuator-controls">
+      <div class="actuator-title">执行器控制系统</div>
+      <div class="actuator-grid">
+        <div class="actuator-card">
+          <div class="actuator-name">空调系统</div>
+          <div class="actuator-status status-inactive" id="ac-status">待机</div>
+          <div class="actuator-buttons">
+            <button class="control-btn start-btn" onclick="sendControlCommand('ac-cooling-system', 'start', 'cooling')">制冷</button>
+            <button class="control-btn start-btn" onclick="sendControlCommand('ac-heating-system', 'start', 'heating')">制热</button>
+            <button class="control-btn stop-btn" onclick="sendControlCommand('ac-system', 'stop')">停止</button>
+          </div>
+        </div>
+        
+        <div class="actuator-card">
+          <div class="actuator-name">加湿/除湿系统</div>
+          <div class="actuator-status status-inactive" id="humidifier-status">待机</div>
+          <div class="actuator-buttons">
+            <button class="control-btn start-btn" onclick="sendControlCommand('humidifier-system', 'start', 'humidifying')">加湿</button>
+            <button class="control-btn start-btn" onclick="sendControlCommand('dehumidifier-system', 'start', 'dehumidifying')">除湿</button>
+            <button class="control-btn stop-btn" onclick="sendControlCommand('humidity-system', 'stop')">停止</button>
+          </div>
+        </div>
+        
+        <div class="actuator-card">
+          <div class="actuator-name">空气净化器</div>
+          <div class="actuator-status status-inactive" id="purifier-status">待机</div>
+          <div class="actuator-buttons">
+            <button class="control-btn start-btn" onclick="sendControlCommand('air-purifier-system', 'start', 'purifying')">净化</button>
+            <button class="control-btn stop-btn" onclick="sendControlCommand('air-purifier-system', 'stop')">停止</button>
+          </div>
+        </div>
+        
+        <div class="actuator-card">
+          <div class="actuator-name">报警系统</div>
+          <div class="actuator-status status-inactive" id="alarm-status">待机</div>
+          <div class="actuator-buttons">
+            <button class="control-btn start-btn" onclick="sendControlCommand('alarm-system', 'alert', 'environmental_hazard')">报警</button>
+            <button class="control-btn stop-btn" onclick="sendControlCommand('alarm-system', 'silence')">静音</button>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="chart-container">
-      <div class="chart-title">温湿度变化趋势</div>
+      <div class="chart-title">仓储环境变化趋势</div>
       <canvas id="chart"></canvas>
     </div>
 
@@ -279,10 +459,11 @@
 
     <div class="controls">
       <button id="reset-btn">重置统计数据</button>
+      <button class="navigation-btn" onclick="location.href='warehouse_history.html'">查看历史数据</button>
     </div>
 
     <footer>
-      <p>IoT温湿度监控系统 &copy; 2023 | 实时数据可视化</p>
+      <p>智能仓储环境监测系统 &copy; 2023 | 实时数据可视化</p>
     </footer>
   </div>
 
@@ -297,7 +478,10 @@
     const lastUpdateElement = document.getElementById('last-update');
     const currentTemperatureElement = document.getElementById('current-temperature');
     const currentHumidityElement = document.getElementById('current-humidity');
-    const deviceIdElement = document.getElementById('device-id');
+    const currentAirQualityElement = document.getElementById('current-air-quality');
+    const currentLightLevelElement = document.getElementById('current-light-level');
+    const currentNoiseLevelElement = document.getElementById('current-noise-level');
+    const deviceLocationElement = document.getElementById('device-location');
     const minTemperatureElement = document.getElementById('min-temperature');
     const maxTemperatureElement = document.getElementById('max-temperature');
     const avgTemperatureElement = document.getElementById('avg-temperature');
@@ -305,6 +489,12 @@
     const maxHumidityElement = document.getElementById('max-humidity');
     const avgHumidityElement = document.getElementById('avg-humidity');
     const resetBtn = document.getElementById('reset-btn');
+    
+    // 执行器状态元素
+    const acStatusElement = document.getElementById('ac-status');
+    const humidifierStatusElement = document.getElementById('humidifier-status');
+    const purifierStatusElement = document.getElementById('purifier-status');
+    const alarmStatusElement = document.getElementById('alarm-status');
     
     // 图表相关
     const canvas = document.getElementById('chart');
@@ -317,7 +507,7 @@
     
     // WebSocket连接成功
     ws.onopen = function() {
-      console.log('[VISUALIZATION] Connected to server');
+      console.log('[WAREHOUSE-VISUALIZATION] Connected to server');
       statusElement.textContent = '已连接';
       statusElement.className = 'connected';
       deviceStatusElement.textContent = '在线';
@@ -330,16 +520,19 @@
         if (data.type === 'mqtt_data') {
           updateData(data.payload);
         } else if (data.type === 'welcome') {
-          console.log('[VISUALIZATION] Welcome message:', data.message);
+          console.log('[WAREHOUSE-VISUALIZATION] Welcome message:', data.message);
+        } else if (data.type === 'control_confirm') {
+          // 处理执行器确认消息
+          handleControlConfirmation(data.payload);
         }
       } catch (e) {
-        console.error('[VISUALIZATION] Error parsing message:', e);
+        console.error('[WAREHOUSE-VISUALIZATION] Error parsing message:', e);
       }
     };
     
     // WebSocket连接关闭
     ws.onclose = function() {
-      console.log('[VISUALIZATION] Disconnected from server');
+      console.log('[WAREHOUSE-VISUALIZATION] Disconnected from server');
       statusElement.textContent = '已断开';
       statusElement.className = 'disconnected';
       deviceStatusElement.textContent = '离线';
@@ -347,7 +540,7 @@
     
     // WebSocket发生错误
     ws.onerror = function(error) {
-      console.error('[VISUALIZATION] WebSocket error:', error);
+      console.error('[WAREHOUSE-VISUALIZATION] WebSocket error:', error);
       statusElement.textContent = '连接错误';
       statusElement.className = 'disconnected';
       deviceStatusElement.textContent = '错误';
@@ -358,7 +551,10 @@
       // 更新当前值显示
       currentTemperatureElement.textContent = payload.temperature || '--';
       currentHumidityElement.textContent = payload.humidity || '--';
-      deviceIdElement.textContent = payload.deviceId || '--';
+      currentAirQualityElement.textContent = payload.airQuality || '--';
+      currentLightLevelElement.textContent = payload.lightLevel || '--';
+      currentNoiseLevelElement.textContent = payload.noiseLevel || '--';
+      deviceLocationElement.textContent = payload.location || '--';
       
       // 更新最后更新时间
       const now = new Date();
@@ -419,7 +615,10 @@
       const dataPoint = {
         time: new Date(payload.ts),
         temperature: parseFloat(payload.temperature),
-        humidity: parseFloat(payload.humidity)
+        humidity: parseFloat(payload.humidity),
+        airQuality: parseFloat(payload.airQuality),
+        lightLevel: parseFloat(payload.lightLevel),
+        noiseLevel: parseFloat(payload.noiseLevel)
       };
       
       chartData.push(dataPoint);
@@ -573,6 +772,89 @@
       ctx.fillRect(width - 150, 45, 15, 15);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
       ctx.fillText('湿度', width - 130, 57);
+    }
+    
+    // 发送控制命令
+    function sendControlCommand(deviceId, action, parameter) {
+      const command = {
+        deviceId: deviceId,
+        action: action,
+        parameter: parameter,
+        timestamp: new Date().toISOString()
+      };
+      
+      fetch('/api/control', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(command)
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          console.log('Control command sent successfully');
+          // 立即更新UI状态以提供即时反馈
+          handleControlConfirmation(command);
+        } else {
+          console.error('Failed to send control command:', data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error sending control command:', error);
+      });
+    }
+    
+    // 处理执行器确认消息
+    function handleControlConfirmation(data) {
+      console.log('Received control confirmation:', data);
+      
+      // 根据确认消息更新执行器状态
+      switch(data.deviceId) {
+        case 'ac-cooling-system':
+        case 'ac-heating-system':
+        case 'ac-system':
+          if (data.action === 'start') {
+            acStatusElement.textContent = data.parameter === 'cooling' ? '制冷中' : '制热中';
+            acStatusElement.className = 'actuator-status status-active';
+          } else if (data.action === 'stop') {
+            acStatusElement.textContent = '待机';
+            acStatusElement.className = 'actuator-status status-inactive';
+          }
+          break;
+          
+        case 'humidifier-system':
+        case 'dehumidifier-system':
+        case 'humidity-system':
+          if (data.action === 'start') {
+            humidifierStatusElement.textContent = data.parameter === 'humidifying' ? '加湿中' : '除湿中';
+            humidifierStatusElement.className = 'actuator-status status-active';
+          } else if (data.action === 'stop') {
+            humidifierStatusElement.textContent = '待机';
+            humidifierStatusElement.className = 'actuator-status status-inactive';
+          }
+          break;
+          
+        case 'air-purifier-system':
+          if (data.action === 'start') {
+            purifierStatusElement.textContent = '净化中';
+            purifierStatusElement.className = 'actuator-status status-active';
+          } else if (data.action === 'stop') {
+            purifierStatusElement.textContent = '待机';
+            purifierStatusElement.className = 'actuator-status status-inactive';
+          }
+          break;
+          
+        case 'alarm-system':
+          if (data.action === 'alert') {
+            alarmStatusElement.textContent = '报警中';
+            alarmStatusElement.className = 'actuator-status status-active';
+          } else if (data.action === 'silence') {
+            alarmStatusElement.textContent = '待机';
+            alarmStatusElement.className = 'actuator-status status-inactive';
+          }
+          break;
+      }
     }
     
     // 重置统计数据

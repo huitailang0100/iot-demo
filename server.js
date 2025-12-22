@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config();
 
 // 数据库文件路径
-const DB_FILE_PATH = path.join(__dirname, 'iot_data.db');
+const DB_FILE_PATH = path.join(__dirname, 'warehouse_data.db');
 
 // 初始化数据库
 async function initDatabase() {
@@ -29,26 +29,30 @@ async function initDatabase() {
     try {
       const fileBuffer = fs.readFileSync(DB_FILE_PATH);
       db = new SQL.Database(fileBuffer);
-      console.log('[SERVER] Loaded existing database from file');
+      console.log('[WAREHOUSE-SERVER] Loaded existing database from file');
     } catch (err) {
-      console.error('[SERVER] Error loading database from file:', err.message);
+      console.error('[WAREHOUSE-SERVER] Error loading database from file:', err.message);
       // 如果无法加载现有数据库，则创建一个新的
       db = new SQL.Database();
     }
   } else {
     // 创建新的数据库
     db = new SQL.Database();
-    console.log('[SERVER] Created new database');
+    console.log('[WAREHOUSE-SERVER] Created new database');
   }
   
-  // 创建表
+  // 创建表（添加仓储特有字段）
   db.run(`
-    CREATE TABLE IF NOT EXISTS sensor_data (
+    CREATE TABLE IF NOT EXISTS warehouse_data (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       device_id TEXT,
+      location TEXT,
       timestamp TEXT,
       temperature REAL,
-      humidity REAL
+      humidity REAL,
+      air_quality REAL,
+      light_level INTEGER,
+      noise_level REAL
     )
   `);
   
@@ -61,9 +65,9 @@ function saveDatabaseToFile(db) {
     const data = db.export();
     const buffer = Buffer.from(data);
     fs.writeFileSync(DB_FILE_PATH, buffer);
-    console.log('[SERVER] Database saved to file');
+    console.log('[WAREHOUSE-SERVER] Database saved to file');
   } catch (err) {
-    console.error('[SERVER] Error saving database to file:', err.message);
+    console.error('[WAREHOUSE-SERVER] Error saving database to file:', err.message);
   }
 }
 
@@ -73,7 +77,7 @@ const server = http.createServer((req, res) => {
   if (req.url === '/' || req.url === '/index.html') {
     fs.readFile(path.join(__dirname, 'index.html'), 'utf8', (err, data) => {
       if (err) {
-        console.error('[SERVER] Error reading index.html:', err.message);
+        console.error('[WAREHOUSE-SERVER] Error reading index.html:', err.message);
         res.writeHead(404);
         res.end('File not found');
         return;
@@ -83,9 +87,9 @@ const server = http.createServer((req, res) => {
     });
   } else if (req.url === '/visualization.html') {
     // 添加对 visualization.html 的支持
-    fs.readFile(path.join(__dirname, 'visualization.html'), 'utf8', (err, data) => {
+    fs.readFile(path.join(__dirname, 'warehouse_visualization.html'), 'utf8', (err, data) => {
       if (err) {
-        console.error('[SERVER] Error reading visualization.html:', err.message);
+        console.error('[WAREHOUSE-SERVER] Error reading warehouse_visualization.html:', err.message);
         res.writeHead(404);
         res.end('File not found');
         return;
@@ -94,9 +98,9 @@ const server = http.createServer((req, res) => {
       res.end(data);
     });
   } else if (req.url === '/visualization_history.html') {
-    fs.readFile(path.join(__dirname, 'visualization_history.html'), 'utf8', (err, data) => {
+    fs.readFile(path.join(__dirname, 'warehouse_history.html'), 'utf8', (err, data) => {
       if (err) {
-        console.error('[SERVER] Error reading visualization_history.html:', err.message);
+        console.error('[WAREHOUSE-SERVER] Error reading warehouse_history.html:', err.message);
         res.writeHead(404);
         res.end('File not found');
         return;
@@ -116,7 +120,7 @@ const server = http.createServer((req, res) => {
     const limit = parseInt(urlObj.searchParams.get('limit')) || 100;
     const deviceId = urlObj.searchParams.get('deviceId') || null;
 
-    let query = 'SELECT * FROM sensor_data';
+    let query = 'SELECT * FROM warehouse_data';
     let params = [];
     
     if (deviceId) {
@@ -149,10 +153,36 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(rows));
     } catch (err) {
-      console.error('[SERVER] Database query error:', err);
+      console.error('[WAREHOUSE-SERVER] Database query error:', err);
       res.writeHead(500);
       res.end('Database query error');
     }
+  } else if (req.url === '/api/control' && req.method === 'POST') {
+    // 处理执行器控制请求
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    req.on('end', () => {
+      try {
+        const controlData = JSON.parse(body);
+        // 发送控制命令到MQTT
+        if (mqttClient && mqttClient.connected) {
+          const controlTopic = 'warehouse/control';
+          mqttClient.publish(controlTopic, JSON.stringify(controlData), { qos: 1 });
+          console.log('[WAREHOUSE-SERVER] Sent control command:', controlData);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, message: 'Control command sent' }));
+        } else {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, message: 'MQTT client not connected' }));
+        }
+      } catch (err) {
+        console.error('[WAREHOUSE-SERVER] Error processing control command:', err);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, message: 'Invalid request data' }));
+      }
+    });
   } else {
     res.writeHead(404);
     res.end('Not found');
@@ -169,23 +199,23 @@ let messageCounter = 0;
 
 // 处理WebSocket连接
 wss.on('connection', (ws, req) => {
-  console.log(`[SERVER] New client connected. IP: ${req.socket.remoteAddress}`);
+  console.log(`[WAREHOUSE-SERVER] New client connected. IP: ${req.socket.remoteAddress}`);
   clients.add(ws);
   
   // 发送欢迎消息
   ws.send(JSON.stringify({
     type: 'welcome',
-    message: 'Connected to MQTT data display server',
+    message: 'Connected to Warehouse Environment Monitoring Server',
     timestamp: new Date().toISOString()
   }));
   
   ws.on('close', () => {
-    console.log('[SERVER] Client disconnected');
+    console.log('[WAREHOUSE-SERVER] Client disconnected');
     clients.delete(ws);
   });
   
   ws.on('error', (error) => {
-    console.error('[SERVER] WebSocket error:', error);
+    console.error('[WAREHOUSE-SERVER] WebSocket error:', error);
     clients.delete(ws);
   });
 });
@@ -208,27 +238,27 @@ function broadcastMessage(message) {
     }
   });
   
-  console.log(`[SERVER] Broadcasted message to ${activeClients} clients`);
+  console.log(`[WAREHOUSE-SERVER] Broadcasted message to ${activeClients} clients`);
 }
 
 // 设置MQTT客户端
 const mqttUrl = process.env.MQTT_URL || 'mqtt://localhost:1883';
-const topic = process.env.TOPIC || 'iot/demo/temperature';
+const topic = process.env.TOPIC || 'warehouse/env/monitor';
 
 // 初始化数据库
 let db;
 initDatabase().then(database => {
   db = database;
-  console.log('[SERVER] Database initialized');
+  console.log('[WAREHOUSE-SERVER] Database initialized');
 }).catch(err => {
-  console.error('[SERVER] Database initialization error:', err);
+  console.error('[WAREHOUSE-SERVER] Database initialization error:', err);
 });
 
-console.log(`[SERVER] Connecting to MQTT broker: ${mqttUrl}`);
+console.log(`[WAREHOUSE-SERVER] Connecting to MQTT broker: ${mqttUrl}`);
 const mqttClient = mqtt.connect(mqttUrl, {
   username: process.env.MQTT_USERNAME || undefined,
   password: process.env.MQTT_PASSWORD || undefined,
-  clientId: 'mqtt-web-gateway-' + Math.random().toString(16).substr(2, 8),
+  clientId: 'warehouse-gateway-' + Math.random().toString(16).substr(2, 8),
   clean: true,
   connectTimeout: 4000,
   reconnectPeriod: 1000,
@@ -236,12 +266,21 @@ const mqttClient = mqtt.connect(mqttUrl, {
 
 // MQTT连接成功
 mqttClient.on('connect', () => {
-  console.log('[SERVER] Successfully connected to MQTT broker:', mqttUrl);
+  console.log('[WAREHOUSE-SERVER] Successfully connected to MQTT broker:', mqttUrl);
   mqttClient.subscribe(topic, { qos: 0 }, (err) => {
     if (err) {
-      console.error('[SERVER] Subscribe error:', err.message);
+      console.error('[WAREHOUSE-SERVER] Subscribe error:', err.message);
     } else {
-      console.log(`[SERVER] Successfully subscribed to topic: ${topic}`);
+      console.log(`[WAREHOUSE-SERVER] Successfully subscribed to topic: ${topic}`);
+    }
+  });
+  
+  // 订阅控制命令确认主题
+  mqttClient.subscribe('warehouse/control/confirm', { qos: 1 }, (err) => {
+    if (err) {
+      console.error('[WAREHOUSE-SERVER] Subscribe error:', err.message);
+    } else {
+      console.log(`[WAREHOUSE-SERVER] Successfully subscribed to control confirm topic`);
     }
   });
 });
@@ -251,18 +290,22 @@ mqttClient.on('message', (receivedTopic, message) => {
   if (receivedTopic === topic) {
     try {
       const payload = JSON.parse(message.toString());
-      console.log('[SERVER] Received MQTT message:', JSON.stringify(payload, null, 2));
+      console.log('[WAREHOUSE-SERVER] Received MQTT message:', JSON.stringify(payload, null, 2));
       broadcastMessage(payload);
       
       // 保存到数据库
       if (db) {
         db.run(
-          'INSERT INTO sensor_data (device_id, timestamp, temperature, humidity) VALUES (?, ?, ?, ?)',
+          'INSERT INTO warehouse_data (device_id, location, timestamp, temperature, humidity, air_quality, light_level, noise_level) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
           [
             payload.deviceId || null,
+            payload.location || null,
             new Date(payload.ts).toISOString(),
             parseFloat(payload.temperature) || null,
-            parseFloat(payload.humidity) || null
+            parseFloat(payload.humidity) || null,
+            parseFloat(payload.airQuality) || null,
+            parseInt(payload.lightLevel) || null,
+            parseFloat(payload.noiseLevel) || null
           ]
         );
         
@@ -270,28 +313,128 @@ mqttClient.on('message', (receivedTopic, message) => {
         if (messageCounter % 10 === 0) {
           saveDatabaseToFile(db);
         }
+        
+        // 检查是否需要触发自动化控制
+        checkAutomationRules(payload);
       }
     } catch (e) {
-      console.error('[SERVER] Error parsing MQTT message:', e.message);
-      console.log('[SERVER] Raw message:', message.toString());
+      console.error('[WAREHOUSE-SERVER] Error parsing MQTT message:', e.message);
+      console.log('[WAREHOUSE-SERVER] Raw message:', message.toString());
       broadcastMessage(message.toString());
+    }
+  } else if (receivedTopic === 'warehouse/control/confirm') {
+    // 处理执行器确认消息
+    try {
+      const confirmData = JSON.parse(message.toString());
+      console.log('[WAREHOUSE-SERVER] Received control confirmation:', confirmData);
+      
+      // 广播确认消息给所有客户端
+      const confirmMsg = JSON.stringify({
+        type: 'control_confirm',
+        payload: confirmData,
+        timestamp: new Date().toISOString()
+      });
+      
+      clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(confirmMsg);
+        }
+      });
+    } catch (e) {
+      console.error('[WAREHOUSE-SERVER] Error parsing control confirmation:', e.message);
     }
   }
 });
 
+// 自动化控制逻辑
+function checkAutomationRules(data) {
+  const temperature = parseFloat(data.temperature);
+  const humidity = parseFloat(data.humidity);
+  const airQuality = parseFloat(data.airQuality);
+  
+  // 温度控制规则
+  if (temperature > 30) {
+    // 温度过高，启动空调制冷
+    sendControlCommand({
+      deviceId: 'ac-cooling-system',
+      action: 'start',
+      parameter: 'cooling',
+      reason: 'high_temperature'
+    });
+  } else if (temperature < 18) {
+    // 温度过低，启动空调制热
+    sendControlCommand({
+      deviceId: 'ac-heating-system',
+      action: 'start',
+      parameter: 'heating',
+      reason: 'low_temperature'
+    });
+  }
+  
+  // 湿度控制规则
+  if (humidity > 70) {
+    // 湿度过高，启动除湿器
+    sendControlCommand({
+      deviceId: 'dehumidifier-system',
+      action: 'start',
+      parameter: 'dehumidifying',
+      reason: 'high_humidity'
+    });
+  } else if (humidity < 40) {
+    // 湿度过低，启动加湿器
+    sendControlCommand({
+      deviceId: 'humidifier-system',
+      action: 'start',
+      parameter: 'humidifying',
+      reason: 'low_humidity'
+    });
+  }
+  
+  // 空气质量控制规则
+  if (airQuality < 50) {
+    // 空气质量差，启动空气净化器
+    sendControlCommand({
+      deviceId: 'air-purifier-system',
+      action: 'start',
+      parameter: 'purifying',
+      reason: 'poor_air_quality'
+    });
+  }
+  
+  // 报警规则
+  if (temperature > 35 || temperature < 15 || humidity > 80 || humidity < 30 || airQuality < 30) {
+    // 环境异常，触发报警器
+    sendControlCommand({
+      deviceId: 'alarm-system',
+      action: 'alert',
+      parameter: 'environmental_hazard',
+      reason: 'critical_conditions'
+    });
+  }
+}
+
+// 发送控制命令到MQTT
+function sendControlCommand(command) {
+  if (mqttClient && mqttClient.connected) {
+    const controlTopic = 'warehouse/control';
+    mqttClient.publish(controlTopic, JSON.stringify(command), { qos: 1 });
+    console.log('[WAREHOUSE-SERVER] Sent automated control command:', command);
+  }
+}
+
 // MQTT错误处理
 mqttClient.on('error', (err) => {
-  console.error('[SERVER] MQTT Error:', err.message);
+  console.error('[WAREHOUSE-SERVER] MQTT Error:', err.message);
 });
 
 // MQTT重连事件
 mqttClient.on('reconnect', () => {
-  console.log('[SERVER] MQTT reconnecting...');
+  console.log('[WAREHOUSE-SERVER] MQTT reconnecting...');
 });
 
 // MQTT关闭事件
 mqttClient.on('close', () => {
-  console.log('[SERVER] MQTT connection closed');
+  console.log('[WAREHOUSE-SERVER] MQTT connection closed');
   // 连接关闭时保存数据库
   if (db) {
     saveDatabaseToFile(db);
@@ -300,7 +443,7 @@ mqttClient.on('close', () => {
 
 // 服务器关闭时保存数据库
 process.on('SIGINT', () => {
-  console.log('[SERVER] Shutting down server...');
+  console.log('[WAREHOUSE-SERVER] Shutting down server...');
   if (db) {
     saveDatabaseToFile(db);
   }
@@ -309,5 +452,5 @@ process.on('SIGINT', () => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`[SERVER] HTTP server running on http://localhost:${PORT}`);
+  console.log(`[WAREHOUSE-SERVER] HTTP server running on http://localhost:${PORT}`);
 });
